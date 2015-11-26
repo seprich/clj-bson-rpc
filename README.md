@@ -1,3 +1,5 @@
+[![Build Status](https://travis-ci.org/seprich/clj-bson-rpc.svg?branch=master)](https://travis-ci.org/seprich/clj-bson-rpc)
+
 # clj-bson-rpc
 
 A Clojure library for implementing BSON RPC services and service clients
