@@ -3,6 +3,7 @@
 /.lein-*
 /.nrepl-port
 .hgignore
+pom.xml*
 
 # vim temporary files:
 .*.sw[po]

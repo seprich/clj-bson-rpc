@@ -1,12 +1,12 @@
 [![Build Status](https://travis-ci.org/seprich/clj-bson-rpc.svg?branch=master)](https://travis-ci.org/seprich/clj-bson-rpc)
+[![Dependencies Status](https://jarkeeper.com/seprich/clj-bson-rpc/status.svg)](https://jarkeeper.com/seprich/clj-bson-rpc)
+
+[![Clojars Project](http://clojars.org/clj-bson-rpc/latest-version.svg)](http://clojars.org/clj-bson-rpc)
 
 # clj-bson-rpc
 
 A Clojure library for implementing BSON RPC services and service clients
 on TCP (+ TLS).
-
--> [API DOC][4]
-
 
 ## Rationale
 
