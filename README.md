@@ -53,7 +53,38 @@ context and provides a solution to the problem areas mentioned above.
 
 ## Quickstart
 
-TODO
+### Minimalistic example
+#### Server
+```clojure
+(require
+  '[aleph.tcp :as tcp]   ; [aleph "0.4.1-beta2"] to project.clj
+  '[clj-bson-rpc.tcp :as rpc])
+
+(def request-handlers
+  {:swap-it (fn [msg] (apply str (reverse msg)))
+   :intersperse (fn [c msg] (apply str (interpose c (seq msg))))})
+
+(defn connection-handler [s info]
+  ;; Start serving requests (in core.async go-block):
+  (rpc/connect-rpc! s request-handlers {}))
+
+(tcp/start-server connection-handler {:port 4321})
+```
+
+#### Client
+```clojure
+(require
+  '[aleph.tcp :as tcp]
+  '[clj-bson-rpc.tcp :as rpc])
+
+(def c (rpc/connect-rpc! @(tcp/client {:host "localhost" :port 4321})))
+
+(rpc/request! c :swap-it "example")
+; => "elpmaxe"
+
+(rpc/request! c :intersperse "--" "example")
+; => "e--x--a--m--p--l--e"
+```
 
 ## License
 
