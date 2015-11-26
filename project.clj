@@ -9,9 +9,13 @@
                  [org.clojure/clojure "1.7.0"]
                  [org.clojure/core.async "0.2.374"]]
   :plugins [[lein-ancient "0.6.8"]
+            [lein-codox "0.9.0"]
             [lein-kibit "0.1.2"]
             [michaelblume/lein-marginalia "0.9.0"]
             [lein-ns-dep-graph "0.1.0-SNAPSHOT"]]
+  :codox {:namespaces [clj-bson-rpc.tcp]
+          :source-uri "https://github.com/seprich/clj-bson-rpc/blob/master/{filepath}#L{line}"
+          :metadata {:doc/format :markdown}}
   :profiles {:debug {:debug true
                      :injections [(prn (into {} (System/getProperties)))]}
              :dev {}

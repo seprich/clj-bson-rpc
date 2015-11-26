@@ -169,7 +169,8 @@
 ;; # Public Interface
 
 (def default-options
-  "Default options. See `connect-rpc!` for [option](#Options:) semantics.
+  "Default options. See `connect-rpc!` for semantic explanations. Use these values
+   for keys which were not provided in the `options` argument.
 
    Defaults:
 
@@ -249,52 +250,49 @@
   "Connect rpc services and create a context for sending
    bson-rpc requests and notifications to the rpc peer node over TCP connection.
 
-   Parameters:
-
    * `s` - Manifold duplex stream connected to the rpc peer node.
            (e.g. from aleph.tcp/start-server to the handler or from aleph.tcp/client)
    * `request-handlers`
-     * A Map of request handlers: {::String/Keyword ::Function}. These functions are
-       exposed to be callable by the rpc peer node. Function return values
-       are sent back to peer node and any thrown errors are sent as error responses
-       to the peer node.
-     * Alternatively this parameter accepts a function which takes `rpc-ctx` and returns
-       an above-mentioned Map of request handlers. Necessary if any request handler needs
-       to send notifications to peer during the processing of request.
-       example function:
+       * A Map of request handlers: {::String/Keyword ::Function}. These functions are
+         exposed to be callable by the rpc peer node. Function return values
+         are sent back to peer node and any thrown errors are sent as error responses
+         to the peer node.
+       * Alternatively this parameter accepts a function which takes `rpc-ctx` and returns
+         an above-mentioned Map of request handlers. Necessary if any request handler needs
+         to send notifications to peer during the processing of request.
+         example function:
 
-       ```
-       (defn generate-request-handlers [rpc-ctx]
-         {:quick-task quick-task
-          :long-process (partial long-process rpc-ctx)})
-       ```
-
-       where the `long-process` will thus have the `rpc-ctx` and will be able to call
-       `(notify! rpc-ctx :report-progress details)`
+           ```
+           (defn generate-request-handlers [rpc-ctx]
+             {:quick-task quick-task
+              :long-process (partial long-process rpc-ctx)})
+           ```
+         where the `long-process` will thus have the `rpc-ctx` and will be able to call
+         `(notify! rpc-ctx :report-progress details)` or even `(request! rpc-ctx ...)`
    * `notification-handlers`
-     * A Map of notification handlers: {::String/Keyword ::Function}. These functions
-       will receive the named notifications sent by the peer node.
-       Any errors thrown by these handlers will be delegated to a callback
-       defined by `(:notification-error-handler options)`
-     * Alternatively can be a function which takes `rpc-ctx` and returns a Map of handlers.
+       * A Map of notification handlers: {::String/Keyword ::Function}. These functions
+         will receive the named notifications sent by the peer node.
+         Any errors thrown by these handlers will be delegated to a callback
+         defined by `(:notification-error-handler options)`
+       * Alternatively can be a function which takes `rpc-ctx` and returns a Map of handlers.
    * `options` - A Map of optional arguments. `default-options` are used as a baseline of which
                  any or all values can be overridden with ones provided by `options`.
 
-   Options:
+   Valid keys for `options`:
 
    * `:async-notification-handling` - Boolean for async handling of notifications.
-                                      false -> Handler functions are guaranteed to be called in the message
-                                               receiving order. Next incoming message can't be processed until
-                                               the handler function returns.
-                                      true -> Handlers executed in go-blocks -> random order.
+       * false -> Handler functions are guaranteed to be called in the message
+                  receiving order. Next incoming message can't be processed until
+                  the handler function returns.
+       * true -> Handlers executed in go-blocks -> random order.
    * `:async-request-handling` - Boolean for async handling of requests. Async handling allows multiple
-                                 requests to processed in parallel (if client so wishes). Note that client
-                                 can enforce synchronous processing simply by waiting the answer to previous
-                                 request before calling new request.
-                                 Note: Dispatching of responses is synchronous regardless of this setting.
-                                       If `:async-notification-handling` was set to `false` then all notifications
-                                       possibly sent by a (peer node) response handler will be processed by
-                                       the time the response is returned.
+     requests to processed in parallel (if client so wishes). Note that client
+     can enforce synchronous processing simply by waiting the answer to previous
+     request before calling new request.
+       * Dispatching of responses is synchronous regardless of this setting.
+         If `:async-notification-handling` was set to `false` then all notifications
+         possibly sent by a (peer node) response handler will be processed by
+         the time the response is returned.
    * `:bson-max-len` - Incoming bson message max length.
    * `:connection-closed-handler` - Is called when peer closes the connection.
                                     One argument: `rpc-ctx`. Return value ignored.
@@ -354,22 +352,17 @@
        rpc-ctx))))
 
 (defn async-request!
-  "Request in a core.async process.
-   Returns a channel which will receive:
-
-   * a complete result message from the peer or
-   * `:timeout` or
-   * `:closed` or
-   * `:send-failure`
-
-   Parameters:
+  "RPC Request in a `clojure.core.async` go-block.
 
    * `rpc-ctx` - The Context from `connect-rpc!`.
-                 Special optional setting for defining a per request timeout:
-                 `(assoc rpc-ctx :response-timeout 10000)` for 10 s timeout, if no
-                 response arrived then `:timeout` is send to the result channel.
    * `method` - Remote method name - a keyword or string.
    * `params` - Parameters for the remote method.
+
+   Returns a channel which will receive:
+
+   * The Result message from the RPC Peer Node or
+   * `:closed` or
+   * `:send-failure`
   "
   [rpc-ctx method & params]
   (go
@@ -391,6 +384,18 @@
         (swap! response-channels (fn [m] (dissoc m id)))
         result))))
 
+(defn async-request-with-timeout!
+  "RPC Request in a `clojure.core.async` go-block.
+
+   * `timeout` - Milliseconds to wait for remote method return value.
+   * Otherwise identical to `async-request!`
+
+   Returns a channel which will receive results identical to `async-request!` or
+   possibly the value `:timeout` if waiting of result timed out.
+  "
+  [rpc-ctx timeout method & params]
+  (apply async-request! (assoc rpc-ctx :response-timeout timeout) method params))
+
 (defn request!
   "RPC Request to the peer node. Waits for a response indefinitely.
 
@@ -398,13 +403,13 @@
    * `method` - Remote method name - a keyword or string.
    * `params` - Parameters for the remote method.
 
-   Returns: The return value from the remote method
-   Or Throws:
+   Returns: The return value from the remote method or
+   Throws:
 
    * clojure.lang.ExceptionInfo with `ex-data` mappings:
-     * {:type :rpc-peer :code <rpc-error-code> :details <details-from-peer>} on peer node errors.
-     * {:type :rpc-connection-closed} If either this node or peer node closed the connection.
-     * {:type :rpc-buffer-overflow} Send buffer full.
+       * {:type :rpc-peer :code <rpc-error-code> :details <details-from-peer>} on peer node errors.
+       * {:type :rpc-connection-closed} If either this node or peer node closed the connection.
+       * {:type :rpc-buffer-overflow} Send buffer full.
   "
   [rpc-ctx method & params]
   (let [response (<!! (apply async-request! rpc-ctx method params))
@@ -425,17 +430,11 @@
 (defn request-with-timeout!
   "RPC Request to the peer node. Waits for the response for up to the timeout length of time.
 
-   * `rpc-ctx` - Context returned by `connect-rpc!`.
    * `timeout` - Milliseconds to wait for remote method return value.
-   * `method` - Remote method name - a keyword or string.
-   * `params` - Parameters for the remote method.
+   * Otherwise identical to `request!`
 
-   Returns: The return value from the remote method
-   Or Throws:
-
-   * clojure.lang.ExceptionInfo with `ex-data` mappings:
-     * {:type :rpc-response-timeout} or
-     * {:type :rpc-peer :code <rpc-error-code> :details <details-from-peer>} on peer node errors.
+   Returns: The return value from the remote method or
+   Throws: Identically to `request!` or {:type :rpc-response-timeout} when timeouted.
   "
   [rpc-ctx timeout method & params]
   (let [rpc-ctx (assoc rpc-ctx :response-timeout timeout)]

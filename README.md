@@ -5,11 +5,12 @@
 
 # clj-bson-rpc
 
--> [Code View](http://seprich.github.io/clj-bson-rpc/marginalia.html)
 
 A Clojure library for implementing BSON RPC services and service clients
 on TCP (+ TLS).
 
+-> [API doc](http://seprich.github.io/clj-bson-rpc/codox/clj-bson-rpc.tcp.html)
+-> [Marginalia](http://seprich.github.io/clj-bson-rpc/marginalia.html)
 ## Rationale
 
 #### From JSON-RPC
