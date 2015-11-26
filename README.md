@@ -9,14 +9,16 @@
 A Clojure library for implementing BSON RPC services and service clients
 on TCP (+ TLS).
 
--> [API doc](http://seprich.github.io/clj-bson-rpc/codox/clj-bson-rpc.tcp.html)
--> [Marginalia](http://seprich.github.io/clj-bson-rpc/marginalia.html)
+| [API doc](http://seprich.github.io/clj-bson-rpc/codox/clj-bson-rpc.tcp.html)
+| [Marginalia](http://seprich.github.io/clj-bson-rpc/marginalia.html)
+|
+
 ## Rationale
 
 #### From JSON-RPC
 
 > "JSON-RPC is a stateless, light-weight remote procedure call (RPC) protocol."
-[(JSON-RPC 2.0 Specifiation)][1]
+[JSON-RPC 2.0 Specifiation](http://www.jsonrpc.org/specification)
 
 #### To BSON-RPC
 
@@ -34,16 +36,12 @@ protocol it does fall short in a few specific areas of interest:
     segments -> Cannot claim to be pure JSON RPC. (Besides using HTTP
       sacrifices the bi-directionality of JSON RPC.)
 * No datetime type.
-* Cumbersome message boundaries. Even if this is somewhat a matter of opinion,
-  the fact that json message size cannot be known until the last byte of the
-  message is received has the consequence that identifying and processing of
-  messages from the input stream is intimately tied to JSON parser itself.
 
-Fortunately [BSON][2] can be used almost as a drop-in replacement to use in RPC
-context and provides a solution to the problem areas mentioned above.
+Fortunately [BSON](http://bsonspec.org/spec.html) can be used almost
+as a drop-in replacement to use in RPC context and provides a solution
+to the problem areas mentioned above.
 * No penalty for binaries.
 * UTC datetime (milliseconds since the Unix epoch.)
-* Message length information in the 4 first bytes of the message.
 
 #### Differences between BSON-RPC and JSON-RPC 2.0:
 * Batches are not supported since BSON does not support top-level arrays.
@@ -52,7 +50,13 @@ context and provides a solution to the problem areas mentioned above.
 
 ## Dependencies
 
-* Logging with [timbre][3].
+* [Manifold](https://github.com/ztellman/manifold) for message streams.
+* Logging with [timbre](https://github.com/ptaoussanis/timbre).
+
+In this documentation it is implicitly assumed that the
+[aleph](https://github.com/ztellman/aleph) library will be used as the
+TCP (+TLS) connectivity provider, but any stream connection which can be
+wrapped into manifold duplex-stream should suffice.
 
 ## Quickstart
 
@@ -73,6 +77,11 @@ context and provides a solution to the problem areas mentioned above.
 
 (tcp/start-server connection-handler {:port 4321})
 ```
+On the TCP-server side the client connections are promoted to RPC context with
+`connect-rpc!` taking socket, request-handlers and an empty Map of notification
+handlers. This call forks a core.async process which dispatches all incoming
+requests, notifications and responses to their respectful handlers.
+`connect-rpc!` returns a "context" object which is ignored in here.
 
 #### Client
 ```clojure
@@ -80,14 +89,19 @@ context and provides a solution to the problem areas mentioned above.
   '[aleph.tcp :as tcp]
   '[clj-bson-rpc.tcp :as rpc])
 
-(def c (rpc/connect-rpc! @(tcp/client {:host "localhost" :port 4321})))
+(def rpc-ctx (rpc/connect-rpc! @(tcp/client {:host "localhost" :port 4321})))
 
-(rpc/request! c :swap-it "example")
+(rpc/request! rpc-ctx :swap-it "example")
 ; => "elpmaxe"
 
-(rpc/request! c :intersperse "--" "example")
+(rpc/request! rpc-ctx :intersperse "--" "example")
 ; => "e--x--a--m--p--l--e"
 ```
+On the TCP-client side the connection is equivalently wrapped with
+`connect-rpc!` but this time we choose to not set any request nor
+notification -handlers. The returned rpc-ctx is necessary for making
+requests to the peer node (= server).
+
 
 ## License
 
@@ -95,9 +109,3 @@ Copyright © 2015 Jussi Seppälä
 
 Distributed under the Eclipse Public License either version 1.0 or (at
 your option) any later version.
-
-
-[1]: http://www.jsonrpc.org/specification
-[2]: http://bsonspec.org/spec.html
-[3]: http://github.com/ptaoussanis/timbre
-[4]: http://github.com/seprich/
