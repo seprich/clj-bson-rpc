@@ -65,5 +65,5 @@ your option) any later version.
 
 [1]: http://www.jsonrpc.org/specification
 [2]: http://bsonspec.org/spec.html
-[3]: https://github.com/ptaoussanis/timbre
-[4]: /docs/uberdoc.html
+[3]: http://github.com/ptaoussanis/timbre
+[4]: http://github.com/seprich/

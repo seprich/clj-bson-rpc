@@ -1,6 +1,6 @@
-(defproject clj-bson-rpc "0.1.0-SNAPSHOT"
+(defproject clj-bson-rpc "0.1.0"
   :description "bson rpc protocol"
-  :url "http://example.com/FIXME"
+  :url "http://github.com/seprich/clj-bson-rpc"
   :license {:name "Eclipse Public License"
             :url "http://www.eclipse.org/legal/epl-v10.html"}
   :dependencies [[com.taoensso/timbre "4.1.4"]
