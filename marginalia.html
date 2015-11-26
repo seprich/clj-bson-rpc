@@ -2865,185 +2865,8 @@ net.brehaut.ClojureTools = (function (SH) {
     build_tree: build_tree
   };
 })(SyntaxHighlighter);
-</script><title>clj-bson-rpc -- Marginalia</title></head><body><table><tr><td class="docs"><div class="header"><h1 class="project-name"><a href="http://example.com/FIXME">clj-bson-rpc</a></h1><h2 class="project-version">0.1.0-SNAPSHOT</h2><br /><p>bson rpc protocol</p>
-</div><div class="dependencies"><h3>dependencies</h3><table><tr><td class="dep-name">com.taoensso/timbre</td><td class="dotted"><hr /></td><td class="dep-version">4.1.4</td></tr><tr><td class="dep-name">congomongo</td><td class="dotted"><hr /></td><td class="dep-version">0.4.6</td></tr><tr><td class="dep-name">manifold</td><td class="dotted"><hr /></td><td class="dep-version">0.1.1</td></tr><tr><td class="dep-name">org.clojure/clojure</td><td class="dotted"><hr /></td><td class="dep-version">1.7.0</td></tr><tr><td class="dep-name">org.clojure/core.async</td><td class="dotted"><hr /></td><td class="dep-version">0.2.374</td></tr></table></div></td><td class="codes" style="text-align: center; vertical-align: middle;color: #666;padding-right:20px"><br /><br /><br />(this space intentionally left almost blank)</td></tr><tr><td class="docs"><div class="toc"><a name="toc"><h3>namespaces</h3></a><ul><li><a href="#clj-bson-rpc.rpc">clj-bson-rpc.rpc</a></li><li><a href="#clj-bson-rpc.bytes">clj-bson-rpc.bytes</a></li><li><a href="#clj-bson-rpc.bson">clj-bson-rpc.bson</a></li><li><a href="#clj-bson-rpc.tcp">clj-bson-rpc.tcp</a></li></ul></div></td><td class="codes">&nbsp;</td></tr><tr><td class="docs"><div class="docs-header"><a class="anchor" href="#clj-bson-rpc.rpc" name="clj-bson-rpc.rpc"><h1 class="project-name">clj-bson-rpc.rpc</h1><a class="toc-link" href="#toc">toc</a></a></div></td><td class="codes" /></tr><tr><td class="docs"><p>BSON-RPC Connection over <a href="https://github.com/ztellman/manifold">manifold</a> duplex stream.</p>
-
-<p>   Practical applications include (but limited to) using <a href="https://github.com/ztellman/aleph">aleph</a>
-   to establish TCP connection (+ TLS) between the client and the server.</p>
-
-<p>   After an RPC connection has been set on both sides, the RPC nodes are principally equal.
-   The TCP client may provide services which the TCP server then uses and vice versa.</p>
-</td><td class="codes"><pre class="brush: clojure">(ns clj-bson-rpc.rpc)</pre></td></tr><tr><td class="docs"><h2>Constants and Helpers</h2>
-</td><td class="codes"></td></tr><tr><td class="docs">
-</td><td class="codes"><pre class="brush: clojure">(def rpc-error
-  {:parse-error      {:code -32700 :message &quot;Parse error&quot;}
-   :invalid-request  {:code -32600 :message &quot;Invalid Request&quot;}
-   :method-not-found {:code -32601 :message &quot;Method not found&quot;}
-   :invalid-params   {:code -32602 :message &quot;Invalid params&quot;}
-   :internal-error   {:code -32603 :message &quot;Internal error&quot;}
-   :server-error     {:code -32000 :message &quot;Server error&quot;}})</pre></td></tr><tr><td class="docs">
-</td><td class="codes"><pre class="brush: clojure">(def rpc-version &quot;2.0&quot;)</pre></td></tr><tr><td class="docs">
-</td><td class="codes"><pre class="brush: clojure">(defonce identifier-counter (atom 1))
-(defn default-id-generator [] (str &quot;id-&quot; (swap! identifier-counter inc)))</pre></td></tr><tr><td class="docs"><h2>Message Type Identifiers</h2>
-</td><td class="codes"></td></tr><tr><td class="docs">
-</td><td class="codes"><pre class="brush: clojure">(defn request?
-  [{:keys [protocol-keyword]} msg]
-  (and (= (get msg protocol-keyword) rpc-version)
-       (string? (:method msg))
-       (contains? msg :id) (or (string? (:id msg)) (integer? (:id msg)) (nil? (:id msg)))))</pre></td></tr><tr><td class="docs">
-</td><td class="codes"><pre class="brush: clojure">(defn notification?
-  [{:keys [protocol-keyword]} msg]
-  (and (= (get msg protocol-keyword) rpc-version)
-       (string? (:method msg))
-       (not (contains? msg :id))))</pre></td></tr><tr><td class="docs">
-</td><td class="codes"><pre class="brush: clojure">(defn response?
-  [{:keys [protocol-keyword]} msg]
-  (let [result-and-no-error (and (contains? msg :result) (not (contains? msg :error)))
-        error-and-no-result (and (not (contains? msg :result))
-                                 (integer? (get-in msg [:error :code]))
-                                 (string? (get-in msg [:error :message])))]
-    (and (= (get msg protocol-keyword) rpc-version)
-         (contains? msg :id) (or (string? (:id msg)) (integer? (:id msg)))
-         (or result-and-no-error error-and-no-result))))</pre></td></tr><tr><td class="docs">
-</td><td class="codes"><pre class="brush: clojure">(defn nil-id-error-response?
-  [{:keys [protocol-keyword]} msg]
-  (let [error-and-no-result (and (not (contains? msg :result))
-                                 (integer? (get-in msg [:error :code]))
-                                 (string? (get-in msg [:error :message])))]
-    (and (= (get msg protocol-keyword) rpc-version)
-         (contains? msg :id) (nil? (:id msg))
-         error-and-no-result)))</pre></td></tr><tr><td class="docs"><h2>Inbound Requests, Notifications</h2>
-</td><td class="codes"></td></tr><tr><td class="docs">
-</td><td class="codes"><pre class="brush: clojure">(defn handle-request
-  [protocol-keyword request-handlers msg]
-  (let [method (name (:method msg))
-        params (:params msg)
-        id (:id msg)
-        ok-response (fn [result] {protocol-keyword rpc-version
-                                  :result result
-                                  :id id})
-        invalid-params (fn [e-msg] {protocol-keyword rpc-version
-                                    :error (assoc (:invalid-params rpc-error) :data e-msg)
-                                    :id id})
-        method-not-found (fn [] {protocol-keyword rpc-version
-                                 :error (:method-not-found rpc-error)
-                                 :id id})]
-    (if (contains? request-handlers method)
-      (try
-        (ok-response (apply (get request-handlers method) params))
-        (catch clojure.lang.ArityException e (invalid-params (str e))))
-      (method-not-found))))</pre></td></tr><tr><td class="docs">
-</td><td class="codes"><pre class="brush: clojure">(defn handle-notification
-  [notification-error-handler notification-handlers msg]
-  (let [method (name (:method msg))
-        params (:params msg)]
-    (if (contains? notification-handlers method)
-      (apply (get notification-handlers method) params)
-      (notification-error-handler
-        (ex-info (str &quot;No handler found for notification:&quot; method)
-                 {:type :notification-handler-not-found :method method})))))</pre></td></tr><tr><td class="spacer docs">&nbsp;</td><td class="codes" /></tr><tr><td class="docs"><div class="docs-header"><a class="anchor" href="#clj-bson-rpc.bytes" name="clj-bson-rpc.bytes"><h1 class="project-name">clj-bson-rpc.bytes</h1><a class="toc-link" href="#toc">toc</a></a></div></td><td class="codes" /></tr><tr><td class="docs"><p>Utilities for binary/byte-buffer manipulations.</p>
-</td><td class="codes"><pre class="brush: clojure">(ns clj-bson-rpc.bytes
-  (:import
-    [java.nio ByteBuffer ByteOrder]))</pre></td></tr><tr><td class="docs"><p>Read int32-le from byte-array</p>
-</td><td class="codes"><pre class="brush: clojure">(defn peek-int32-le
-  [bbuf]
-  (-&gt; (ByteBuffer/wrap bbuf 0 4)
-      (.order ByteOrder/LITTLE_ENDIAN)
-      (.getInt)
-      (long)))</pre></td></tr><tr><td class="docs"><p>Concatenate byte buffers.
-   byte arrays for now. Consider using ByteBuffer in future (which by itself
-   is not dynamic).</p>
-</td><td class="codes"><pre class="brush: clojure">(defn bbuf-concat
-  [a b]
-  (byte-array (concat a b)))</pre></td></tr><tr><td class="docs">
-</td><td class="codes"><pre class="brush: clojure">(defn bbuf-split-at
-  [n bbuf]
-  (mapv byte-array (split-at n bbuf)))</pre></td></tr><tr><td class="spacer docs">&nbsp;</td><td class="codes" /></tr><tr><td class="docs"><div class="docs-header"><a class="anchor" href="#clj-bson-rpc.bson" name="clj-bson-rpc.bson"><h1 class="project-name">clj-bson-rpc.bson</h1><a class="toc-link" href="#toc">toc</a></a></div></td><td class="codes" /></tr><tr><td class="docs"><p>BSON encoding and decoding. Utilizes mongodb codecs for
-   clojure &lt;-> bson conversions.</p>
-</td><td class="codes"><pre class="brush: clojure">(ns clj-bson-rpc.bson
-  (:import
-    [org.bson BasicBSONDecoder BasicBSONEncoder])
-  (:require
-    [clj-bson-rpc.bytes :refer [bbuf-concat bbuf-split-at peek-int32-le]]
-    [manifold.stream :as stream]
-    [somnium.congomongo.coerce :refer [coerce]]))</pre></td></tr><tr><td class="docs"><p>Encode message to BSON byte-array</p>
-</td><td class="codes"><pre class="brush: clojure">(defn encode
-  [m]
-  (.encode (BasicBSONEncoder.) (coerce m [:clojure :mongo])))</pre></td></tr><tr><td class="docs"><p>Decode BSON byte-array to message</p>
-</td><td class="codes"><pre class="brush: clojure">(defn decode
-  [b]
-  (coerce (.readObject (BasicBSONDecoder.) b) [:mongo :clojure]))</pre></td></tr><tr><td class="docs"><p>Lift BSON message(s) from source stream <code>s</code> based on BSON frame recognition,
-   decode to clojure (Map messages) and push to the result stream. Various errors will
-   produce <code>ex-info</code> items to the result stream.</p>
-</td><td class="codes"><pre class="brush: clojure">(defn- stream-decoder
-  [s max-len]
-  (let [source (stream/-&gt;source s)
-        sink (stream/stream)
-        find-frames (fn [bbuff]
-                      (loop [frames [] remainder bbuff]
-                        (let [blen (count remainder)
-                              rlen (when (&gt;= blen 4) (peek-int32-le remainder))
-                              err-long #(ex-info (str &quot;Message length exceeds the maximum allowed. &quot;
-                                                      &quot;Max: &quot; max-len &quot;, Message len: &quot; rlen)
-                                                 {:type :exceeds-max-length :bytes remainder})
-                              err-frame #(ex-info &quot;Message framing error.&quot;
-                                                  {:type :invalid-framing :bytes remainder})]
-                          (cond
-                            (nil? rlen)      [frames remainder]
-                            (&gt; rlen max-len) [(conj frames (err-long)) remainder]
-                            (&lt; rlen 5)       [(conj frames (err-frame)) remainder]
-                            (&gt;= blen rlen)   (let [[frame remainder] (bbuf-split-at rlen remainder)]
-                                               (recur (conj frames frame) remainder))
-                            :else            [frames remainder]))))
-        decode-frame (fn [frame]
-                       (if (instance? clojure.lang.ExceptionInfo frame)
-                         frame
-                         (try
-                           (decode frame)
-                           (catch Exception e
-                             (ex-info (str e) {:type :invalid-bson :bytes frame})))))
-        buffer (atom (byte-array []))
-        decoder (fn [new-bytes]
-                  (let [[frames remainder] (find-frames (bbuf-concat @buffer new-bytes))
-                        trail (if (and (stream/drained? source) (seq remainder))
-                                [(ex-info &quot;Non-decodable trailing bytes when stream was closed.&quot;
-                                          {:type :trailing-garbage :bytes remainder})]
-                                [])]
-                    (reset! buffer remainder)
-                    (-&gt;&gt; (into frames trail)
-                         (mapv decode-frame)
-                         (stream/put-all! sink))))]
-    (stream/connect-via source decoder sink {:downstream? false})
-    (stream/on-drained source #(do (decoder []) (stream/close! sink)))
-    sink))</pre></td></tr><tr><td class="docs"><p>BSON codec for a manifold duplex stream.</p>
-
-<ul>
-<li><code>s</code> - Duplex stream of raw bytes (possibly from aleph)</li>
-<li><p><code>max-len</code> - Optional argument for limiting incoming message maximum size.</p>
-
-<p>Returns a duplex stream which:</p>
-
-<ul><li>As a sink takes clojure maps which are encoded and sent to the byte stream <code>s</code></li>
-<li>As a source produces decoded (clojurized) BSON messages from <code>s</code></li></ul>
-
-<p>Any non-decodable byte sequences from the raw stream are converted to
-clojure.lang.ExceptionInfo objects which are takeable from the returned
-duplex stream. Thus take! from this source will either:</p>
-
-<ul><li>Block waiting a new message.</li>
-<li>Return a bson message.</li>
-<li>Return a clojure.lang.ExceptionInfo object.
-<ul><li>Message framing error (bson length is negative or &lt; 5)-> :type :invalid-framing</li>
-<li>Message decoding error from bson parser-> :type :invalid-bson
-! Stream <code>s</code> must be closed.</li>
-<li>Non-decodable trailing bytes when stream closed-> :type :trailing-garbage</li></ul></li>
-<li>Return nil if underlying stream <code>s</code> is closed and source is drained.</li></ul></li>
-</ul>
-</td><td class="codes"><pre class="brush: clojure">(defn bson-codec
-  [s &amp; {:keys [max-len] :or {max-len (Integer/MAX_VALUE)}}]
-  (let [out (stream/stream)]
-    (stream/connect (stream/map encode out) s)
-    (stream/splice out (stream-decoder s max-len))))</pre></td></tr><tr><td class="spacer docs">&nbsp;</td><td class="codes" /></tr><tr><td class="docs"><div class="docs-header"><a class="anchor" href="#clj-bson-rpc.tcp" name="clj-bson-rpc.tcp"><h1 class="project-name">clj-bson-rpc.tcp</h1><a class="toc-link" href="#toc">toc</a></a></div></td><td class="codes" /></tr><tr><td class="docs"><p>BSON-RPC Connection over <a href="https://github.com/ztellman/manifold">manifold</a> duplex stream.</p>
+</script><title>clj-bson-rpc -- Marginalia</title></head><body><table><tr><td class="docs"><div class="header"><h1 class="project-name"><a href="http://github.com/seprich/clj-bson-rpc">clj-bson-rpc</a></h1><h2 class="project-version">0.1.0</h2><br /><p>bson rpc protocol</p>
+</div><div class="dependencies"><h3>dependencies</h3><table><tr><td class="dep-name">com.taoensso/timbre</td><td class="dotted"><hr /></td><td class="dep-version">4.1.4</td></tr><tr><td class="dep-name">congomongo</td><td class="dotted"><hr /></td><td class="dep-version">0.4.6</td></tr><tr><td class="dep-name">manifold</td><td class="dotted"><hr /></td><td class="dep-version">0.1.1</td></tr><tr><td class="dep-name">org.clojure/clojure</td><td class="dotted"><hr /></td><td class="dep-version">1.7.0</td></tr><tr><td class="dep-name">org.clojure/core.async</td><td class="dotted"><hr /></td><td class="dep-version">0.2.374</td></tr></table></div></td><td class="codes" style="text-align: center; vertical-align: middle;color: #666;padding-right:20px"><br /><br /><br />(this space intentionally left almost blank)</td></tr><tr><td class="docs"><div class="toc"><a name="toc"><h3>namespaces</h3></a><ul><li><a href="#clj-bson-rpc.tcp">clj-bson-rpc.tcp</a></li><li><a href="#clj-bson-rpc.bson">clj-bson-rpc.bson</a></li><li><a href="#clj-bson-rpc.bytes">clj-bson-rpc.bytes</a></li><li><a href="#clj-bson-rpc.rpc">clj-bson-rpc.rpc</a></li></ul></div></td><td class="codes">&nbsp;</td></tr><tr><td class="docs"><div class="docs-header"><a class="anchor" href="#clj-bson-rpc.tcp" name="clj-bson-rpc.tcp"><h1 class="project-name">clj-bson-rpc.tcp</h1><a class="toc-link" href="#toc">toc</a></a></div></td><td class="codes" /></tr><tr><td class="docs"><p>BSON-RPC Connection over <a href="https://github.com/ztellman/manifold">manifold</a> duplex stream.</p>
 
 <p>   Practical applications include using <a href="https://github.com/ztellman/aleph">aleph</a>
    to establish TCP connection (+ TLS) between the client and the server.</p>
@@ -3193,7 +3016,8 @@ duplex stream. Thus take! from this source will either:</p>
       (doseq [chn (vals @response-channels)] ; Signal to waiters that connection is closed
         (stream/put! chn :closed))
       (log/trace connection-id &quot;- Exit RPC message dispatcher.&quot;))))</pre></td></tr><tr><td class="docs"><h1>Public Interface</h1>
-</td><td class="codes"></td></tr><tr><td class="docs"><p>Default options. See <code>connect-rpc!</code> for <a href="#Options:">option</a> semantics.</p>
+</td><td class="codes"></td></tr><tr><td class="docs"><p>Default options. See <code>connect-rpc!</code> for semantic explanations. Use these values
+   for keys which were not provided in the <code>options</code> argument.</p>
 
 <p>   Defaults:</p>
 
@@ -3269,53 +3093,51 @@ duplex stream. Thus take! from this source will either:</p>
    (throw (ex-info &quot;&quot; {:type :rpc-control :action :close-all :response response}))))</pre></td></tr><tr><td class="docs"><p>Connect rpc services and create a context for sending
    bson-rpc requests and notifications to the rpc peer node over TCP connection.</p>
 
-<p>   Parameters:</p>
-
 <ul>
 <li><code>s</code> - Manifold duplex stream connected to the rpc peer node.
        (e.g. from aleph.tcp/start-server to the handler or from aleph.tcp/client)</li>
 <li><p><code>request-handlers</code></p>
 
 <ul><li>A Map of request handlers: {::String/Keyword ::Function}. These functions are
-exposed to be callable by the rpc peer node. Function return values
-are sent back to peer node and any thrown errors are sent as error responses
-to the peer node.</li>
+ exposed to be callable by the rpc peer node. Function return values
+ are sent back to peer node and any thrown errors are sent as error responses
+ to the peer node.</li>
 <li><p>Alternatively this parameter accepts a function which takes <code>rpc-ctx</code> and returns
-an above-mentioned Map of request handlers. Necessary if any request handler needs
-to send notifications to peer during the processing of request.
-example function:</p>
+ an above-mentioned Map of request handlers. Necessary if any request handler needs
+ to send notifications to peer during the processing of request.
+ example function:</p>
 
-<p>```
-(defn generate-request-handlers [rpc-ctx]
- {:quick-task quick-task
-  :long-process (partial long-process rpc-ctx)})
-```</p>
-
-<p>where the <code>long-process</code> will thus have the <code>rpc-ctx</code> and will be able to call
-<code>(notify! rpc-ctx :report-progress details)</code></p></li></ul></li>
+<p>   ```
+   (defn generate-request-handlers [rpc-ctx]
+     {:quick-task quick-task
+      :long-process (partial long-process rpc-ctx)})
+   ```
+ where the <code>long-process</code> will thus have the <code>rpc-ctx</code> and will be able to call
+ <code>(notify! rpc-ctx :report-progress details)</code> or even <code>(request! rpc-ctx ...)</code></p></li></ul></li>
 <li><code>notification-handlers</code>
 <ul><li>A Map of notification handlers: {::String/Keyword ::Function}. These functions
-will receive the named notifications sent by the peer node.
-Any errors thrown by these handlers will be delegated to a callback
-defined by <code>(:notification-error-handler options)</code></li>
+ will receive the named notifications sent by the peer node.
+ Any errors thrown by these handlers will be delegated to a callback
+ defined by <code>(:notification-error-handler options)</code></li>
 <li>Alternatively can be a function which takes <code>rpc-ctx</code> and returns a Map of handlers.</li></ul></li>
 <li><p><code>options</code> - A Map of optional arguments. <code>default-options</code> are used as a baseline of which
              any or all values can be overridden with ones provided by <code>options</code>.</p>
 
-<p>Options:</p></li>
-<li><p><code>:async-notification-handling</code> - Boolean for async handling of notifications.
-                                  false -> Handler functions are guaranteed to be called in the message
-                                           receiving order. Next incoming message can't be processed until
-                                           the handler function returns.
-                                  true -> Handlers executed in go-blocks -> random order.</p></li>
+<p>Valid keys for <code>options</code>:</p></li>
+<li><p><code>:async-notification-handling</code> - Boolean for async handling of notifications.</p>
+
+<ul><li>false -> Handler functions are guaranteed to be called in the message
+          receiving order. Next incoming message can't be processed until
+          the handler function returns.</li>
+<li>true -> Handlers executed in go-blocks -> random order.</li></ul></li>
 <li><code>:async-request-handling</code> - Boolean for async handling of requests. Async handling allows multiple
-                             requests to processed in parallel (if client so wishes). Note that client
-                             can enforce synchronous processing simply by waiting the answer to previous
-                             request before calling new request.
-                             Note: Dispatching of responses is synchronous regardless of this setting.
-                                   If <code>:async-notification-handling</code> was set to <code>false</code> then all notifications
-                                   possibly sent by a (peer node) response handler will be processed by
-                                   the time the response is returned.</li>
+ requests to processed in parallel (if client so wishes). Note that client
+ can enforce synchronous processing simply by waiting the answer to previous
+ request before calling new request.
+<ul><li>Dispatching of responses is synchronous regardless of this setting.
+ If <code>:async-notification-handling</code> was set to <code>false</code> then all notifications
+ possibly sent by a (peer node) response handler will be processed by
+ the time the response is returned.</li></ul></li>
 <li><code>:bson-max-len</code> - Incoming bson message max length.</li>
 <li><code>:connection-closed-handler</code> - Is called when peer closes the connection.
                                 One argument: <code>rpc-ctx</code>. Return value ignored.</li>
@@ -3373,22 +3195,17 @@ defined by <code>(:notification-error-handler options)</code></li>
                           :notification-handlers notification-handlers
                           :request-handlers request-handlers)]
        (run-rpc-services rpc-ctx)
-       rpc-ctx))))</pre></td></tr><tr><td class="docs"><p>Request in a core.async process.
-   Returns a channel which will receive:</p>
+       rpc-ctx))))</pre></td></tr><tr><td class="docs"><p>RPC Request in a <code>clojure.core.async</code> go-block.</p>
 
 <ul>
-<li>a complete result message from the peer or</li>
-<li><code>:timeout</code> or</li>
-<li><code>:closed</code> or</li>
-<li><p><code>:send-failure</code></p>
-
-<p>Parameters:</p></li>
-<li><p><code>rpc-ctx</code> - The Context from <code>connect-rpc!</code>.
-             Special optional setting for defining a per request timeout:
-             <code>(assoc rpc-ctx :response-timeout 10000)</code> for 10 s timeout, if no
-             response arrived then <code>:timeout</code> is send to the result channel.</p></li>
+<li><code>rpc-ctx</code> - The Context from <code>connect-rpc!</code>.</li>
 <li><code>method</code> - Remote method name - a keyword or string.</li>
-<li><code>params</code> - Parameters for the remote method.</li>
+<li><p><code>params</code> - Parameters for the remote method.</p>
+
+<p>Returns a channel which will receive:</p></li>
+<li><p>The Result message from the RPC Peer Node or</p></li>
+<li><code>:closed</code> or</li>
+<li><code>:send-failure</code></li>
 </ul>
 </td><td class="codes"><pre class="brush: clojure">(defn async-request!
   [rpc-ctx method &amp; params]
@@ -3409,15 +3226,26 @@ defined by <code>(:notification-error-handler options)</code></li>
                        @(stream/try-take! (stream/-&gt;source channel) nil response-timeout :timeout))
                      (if (stream/closed? (:socket rpc-ctx)) :closed :send-failure))]
         (swap! response-channels (fn [m] (dissoc m id)))
-        result))))</pre></td></tr><tr><td class="docs"><p>RPC Request to the peer node. Waits for a response indefinitely.</p>
+        result))))</pre></td></tr><tr><td class="docs"><p>RPC Request in a <code>clojure.core.async</code> go-block.</p>
+
+<ul>
+<li><code>timeout</code> - Milliseconds to wait for remote method return value.</li>
+<li><p>Otherwise identical to <code>async-request!</code></p>
+
+<p>Returns a channel which will receive results identical to <code>async-request!</code> or
+possibly the value <code>:timeout</code> if waiting of result timed out.</p></li>
+</ul>
+</td><td class="codes"><pre class="brush: clojure">(defn async-request-with-timeout!
+  [rpc-ctx timeout method &amp; params]
+  (apply async-request! (assoc rpc-ctx :response-timeout timeout) method params))</pre></td></tr><tr><td class="docs"><p>RPC Request to the peer node. Waits for a response indefinitely.</p>
 
 <ul>
 <li><code>rpc-ctx</code> - Context returned by <code>connect-rpc!</code>.</li>
 <li><code>method</code> - Remote method name - a keyword or string.</li>
 <li><p><code>params</code> - Parameters for the remote method.</p>
 
-<p>Returns: The return value from the remote method
-Or Throws:</p></li>
+<p>Returns: The return value from the remote method or
+Throws:</p></li>
 <li><p>clojure.lang.ExceptionInfo with <code>ex-data</code> mappings:</p>
 
 <ul><li>{:type :rpc-peer :code <rpc-error-code> :details <details-from-peer>} on peer node errors.</li>
@@ -3441,17 +3269,11 @@ Or Throws:</p></li>
       :else (throw (ex-info &quot;Unknown&quot; {:type :rpc-unknown})))))</pre></td></tr><tr><td class="docs"><p>RPC Request to the peer node. Waits for the response for up to the timeout length of time.</p>
 
 <ul>
-<li><code>rpc-ctx</code> - Context returned by <code>connect-rpc!</code>.</li>
 <li><code>timeout</code> - Milliseconds to wait for remote method return value.</li>
-<li><code>method</code> - Remote method name - a keyword or string.</li>
-<li><p><code>params</code> - Parameters for the remote method.</p>
+<li><p>Otherwise identical to <code>request!</code></p>
 
-<p>Returns: The return value from the remote method
-Or Throws:</p></li>
-<li><p>clojure.lang.ExceptionInfo with <code>ex-data</code> mappings:</p>
-
-<ul><li>{:type :rpc-response-timeout} or</li>
-<li>{:type :rpc-peer :code <rpc-error-code> :details <details-from-peer>} on peer node errors.</li></ul></li>
+<p>Returns: The return value from the remote method or
+Throws: Identically to <code>request!</code> or {:type :rpc-response-timeout} when timeouted.</p></li>
 </ul>
 </td><td class="codes"><pre class="brush: clojure">(defn request-with-timeout!
   [rpc-ctx timeout method &amp; params]
@@ -3472,7 +3294,184 @@ Or Throws:</p></li>
    Use <code>close-connection!</code> within response handler.</p>
 </td><td class="codes"><pre class="brush: clojure">(defn close!
   [rpc-ctx]
-  (stream/close! (:socket rpc-ctx)))</pre></td></tr><tr><td class="spacer docs">&nbsp;</td><td class="codes" /></tr></table><div class="footer">Generated by <a href="https://github.com/gdeer81/marginalia">Marginalia</a>.&nbsp;&nbsp;Syntax highlighting provided by Alex Gorbatchev's <a href="http://alexgorbatchev.com/SyntaxHighlighter/">SyntaxHighlighter</a><div id="floating-toc"><ul><li class="floating-toc-li" id="floating-toc_clj-bson-rpc.rpc">clj-bson-rpc.rpc</li><li class="floating-toc-li" id="floating-toc_clj-bson-rpc.bytes">clj-bson-rpc.bytes</li><li class="floating-toc-li" id="floating-toc_clj-bson-rpc.bson">clj-bson-rpc.bson</li><li class="floating-toc-li" id="floating-toc_clj-bson-rpc.tcp">clj-bson-rpc.tcp</li></ul></div></div><script type="text/javascript">SyntaxHighlighter.defaults['gutter'] = false;
+  (stream/close! (:socket rpc-ctx)))</pre></td></tr><tr><td class="spacer docs">&nbsp;</td><td class="codes" /></tr><tr><td class="docs"><div class="docs-header"><a class="anchor" href="#clj-bson-rpc.bson" name="clj-bson-rpc.bson"><h1 class="project-name">clj-bson-rpc.bson</h1><a class="toc-link" href="#toc">toc</a></a></div></td><td class="codes" /></tr><tr><td class="docs"><p>BSON encoding and decoding. Utilizes mongodb codecs for
+   clojure &lt;-> bson conversions.</p>
+</td><td class="codes"><pre class="brush: clojure">(ns clj-bson-rpc.bson
+  (:import
+    [org.bson BasicBSONDecoder BasicBSONEncoder])
+  (:require
+    [clj-bson-rpc.bytes :refer [bbuf-concat bbuf-split-at peek-int32-le]]
+    [manifold.stream :as stream]
+    [somnium.congomongo.coerce :refer [coerce]]))</pre></td></tr><tr><td class="docs"><p>Encode message to BSON byte-array</p>
+</td><td class="codes"><pre class="brush: clojure">(defn encode
+  [m]
+  (.encode (BasicBSONEncoder.) (coerce m [:clojure :mongo])))</pre></td></tr><tr><td class="docs"><p>Decode BSON byte-array to message</p>
+</td><td class="codes"><pre class="brush: clojure">(defn decode
+  [b]
+  (coerce (.readObject (BasicBSONDecoder.) b) [:mongo :clojure]))</pre></td></tr><tr><td class="docs"><p>Lift BSON message(s) from source stream <code>s</code> based on BSON frame recognition,
+   decode to clojure (Map messages) and push to the result stream. Various errors will
+   produce <code>ex-info</code> items to the result stream.</p>
+</td><td class="codes"><pre class="brush: clojure">(defn- stream-decoder
+  [s max-len]
+  (let [source (stream/-&gt;source s)
+        sink (stream/stream)
+        find-frames (fn [bbuff]
+                      (loop [frames [] remainder bbuff]
+                        (let [blen (count remainder)
+                              rlen (when (&gt;= blen 4) (peek-int32-le remainder))
+                              err-long #(ex-info (str &quot;Message length exceeds the maximum allowed. &quot;
+                                                      &quot;Max: &quot; max-len &quot;, Message len: &quot; rlen)
+                                                 {:type :exceeds-max-length :bytes remainder})
+                              err-frame #(ex-info &quot;Message framing error.&quot;
+                                                  {:type :invalid-framing :bytes remainder})]
+                          (cond
+                            (nil? rlen)      [frames remainder]
+                            (&gt; rlen max-len) [(conj frames (err-long)) remainder]
+                            (&lt; rlen 5)       [(conj frames (err-frame)) remainder]
+                            (&gt;= blen rlen)   (let [[frame remainder] (bbuf-split-at rlen remainder)]
+                                               (recur (conj frames frame) remainder))
+                            :else            [frames remainder]))))
+        decode-frame (fn [frame]
+                       (if (instance? clojure.lang.ExceptionInfo frame)
+                         frame
+                         (try
+                           (decode frame)
+                           (catch Exception e
+                             (ex-info (str e) {:type :invalid-bson :bytes frame})))))
+        buffer (atom (byte-array []))
+        decoder (fn [new-bytes]
+                  (let [[frames remainder] (find-frames (bbuf-concat @buffer new-bytes))
+                        trail (if (and (stream/drained? source) (seq remainder))
+                                [(ex-info &quot;Non-decodable trailing bytes when stream was closed.&quot;
+                                          {:type :trailing-garbage :bytes remainder})]
+                                [])]
+                    (reset! buffer remainder)
+                    (-&gt;&gt; (into frames trail)
+                         (mapv decode-frame)
+                         (stream/put-all! sink))))]
+    (stream/connect-via source decoder sink {:downstream? false})
+    (stream/on-drained source #(do (decoder []) (stream/close! sink)))
+    sink))</pre></td></tr><tr><td class="docs"><p>BSON codec for a manifold duplex stream.</p>
+
+<ul>
+<li><code>s</code> - Duplex stream of raw bytes (possibly from aleph)</li>
+<li><p><code>max-len</code> - Optional argument for limiting incoming message maximum size.</p>
+
+<p>Returns a duplex stream which:</p>
+
+<ul><li>As a sink takes clojure maps which are encoded and sent to the byte stream <code>s</code></li>
+<li>As a source produces decoded (clojurized) BSON messages from <code>s</code></li></ul>
+
+<p>Any non-decodable byte sequences from the raw stream are converted to
+clojure.lang.ExceptionInfo objects which are takeable from the returned
+duplex stream. Thus take! from this source will either:</p>
+
+<ul><li>Block waiting a new message.</li>
+<li>Return a bson message.</li>
+<li>Return a clojure.lang.ExceptionInfo object.
+<ul><li>Message framing error (bson length is negative or &lt; 5)-> :type :invalid-framing</li>
+<li>Message decoding error from bson parser-> :type :invalid-bson
+! Stream <code>s</code> must be closed.</li>
+<li>Non-decodable trailing bytes when stream closed-> :type :trailing-garbage</li></ul></li>
+<li>Return nil if underlying stream <code>s</code> is closed and source is drained.</li></ul></li>
+</ul>
+</td><td class="codes"><pre class="brush: clojure">(defn bson-codec
+  [s &amp; {:keys [max-len] :or {max-len (Integer/MAX_VALUE)}}]
+  (let [out (stream/stream)]
+    (stream/connect (stream/map encode out) s)
+    (stream/splice out (stream-decoder s max-len))))</pre></td></tr><tr><td class="spacer docs">&nbsp;</td><td class="codes" /></tr><tr><td class="docs"><div class="docs-header"><a class="anchor" href="#clj-bson-rpc.bytes" name="clj-bson-rpc.bytes"><h1 class="project-name">clj-bson-rpc.bytes</h1><a class="toc-link" href="#toc">toc</a></a></div></td><td class="codes" /></tr><tr><td class="docs"><p>Utilities for binary/byte-buffer manipulations.</p>
+</td><td class="codes"><pre class="brush: clojure">(ns clj-bson-rpc.bytes
+  (:import
+    [java.nio ByteBuffer ByteOrder]))</pre></td></tr><tr><td class="docs"><p>Read int32-le from byte-array</p>
+</td><td class="codes"><pre class="brush: clojure">(defn peek-int32-le
+  [bbuf]
+  (-&gt; (ByteBuffer/wrap bbuf 0 4)
+      (.order ByteOrder/LITTLE_ENDIAN)
+      (.getInt)
+      (long)))</pre></td></tr><tr><td class="docs"><p>Concatenate byte buffers.
+   byte arrays for now. Consider using ByteBuffer in future (which by itself
+   is not dynamic).</p>
+</td><td class="codes"><pre class="brush: clojure">(defn bbuf-concat
+  [a b]
+  (byte-array (concat a b)))</pre></td></tr><tr><td class="docs">
+</td><td class="codes"><pre class="brush: clojure">(defn bbuf-split-at
+  [n bbuf]
+  (mapv byte-array (split-at n bbuf)))</pre></td></tr><tr><td class="spacer docs">&nbsp;</td><td class="codes" /></tr><tr><td class="docs"><div class="docs-header"><a class="anchor" href="#clj-bson-rpc.rpc" name="clj-bson-rpc.rpc"><h1 class="project-name">clj-bson-rpc.rpc</h1><a class="toc-link" href="#toc">toc</a></a></div></td><td class="codes" /></tr><tr><td class="docs"><p>BSON-RPC Connection over <a href="https://github.com/ztellman/manifold">manifold</a> duplex stream.</p>
+
+<p>   Practical applications include (but limited to) using <a href="https://github.com/ztellman/aleph">aleph</a>
+   to establish TCP connection (+ TLS) between the client and the server.</p>
+
+<p>   After an RPC connection has been set on both sides, the RPC nodes are principally equal.
+   The TCP client may provide services which the TCP server then uses and vice versa.</p>
+</td><td class="codes"><pre class="brush: clojure">(ns clj-bson-rpc.rpc)</pre></td></tr><tr><td class="docs"><h2>Constants and Helpers</h2>
+</td><td class="codes"></td></tr><tr><td class="docs">
+</td><td class="codes"><pre class="brush: clojure">(def rpc-error
+  {:parse-error      {:code -32700 :message &quot;Parse error&quot;}
+   :invalid-request  {:code -32600 :message &quot;Invalid Request&quot;}
+   :method-not-found {:code -32601 :message &quot;Method not found&quot;}
+   :invalid-params   {:code -32602 :message &quot;Invalid params&quot;}
+   :internal-error   {:code -32603 :message &quot;Internal error&quot;}
+   :server-error     {:code -32000 :message &quot;Server error&quot;}})</pre></td></tr><tr><td class="docs">
+</td><td class="codes"><pre class="brush: clojure">(def rpc-version &quot;2.0&quot;)</pre></td></tr><tr><td class="docs">
+</td><td class="codes"><pre class="brush: clojure">(defonce identifier-counter (atom 1))
+(defn default-id-generator [] (str &quot;id-&quot; (swap! identifier-counter inc)))</pre></td></tr><tr><td class="docs"><h2>Message Type Identifiers</h2>
+</td><td class="codes"></td></tr><tr><td class="docs">
+</td><td class="codes"><pre class="brush: clojure">(defn request?
+  [{:keys [protocol-keyword]} msg]
+  (and (= (get msg protocol-keyword) rpc-version)
+       (string? (:method msg))
+       (contains? msg :id) (or (string? (:id msg)) (integer? (:id msg)) (nil? (:id msg)))))</pre></td></tr><tr><td class="docs">
+</td><td class="codes"><pre class="brush: clojure">(defn notification?
+  [{:keys [protocol-keyword]} msg]
+  (and (= (get msg protocol-keyword) rpc-version)
+       (string? (:method msg))
+       (not (contains? msg :id))))</pre></td></tr><tr><td class="docs">
+</td><td class="codes"><pre class="brush: clojure">(defn response?
+  [{:keys [protocol-keyword]} msg]
+  (let [result-and-no-error (and (contains? msg :result) (not (contains? msg :error)))
+        error-and-no-result (and (not (contains? msg :result))
+                                 (integer? (get-in msg [:error :code]))
+                                 (string? (get-in msg [:error :message])))]
+    (and (= (get msg protocol-keyword) rpc-version)
+         (contains? msg :id) (or (string? (:id msg)) (integer? (:id msg)))
+         (or result-and-no-error error-and-no-result))))</pre></td></tr><tr><td class="docs">
+</td><td class="codes"><pre class="brush: clojure">(defn nil-id-error-response?
+  [{:keys [protocol-keyword]} msg]
+  (let [error-and-no-result (and (not (contains? msg :result))
+                                 (integer? (get-in msg [:error :code]))
+                                 (string? (get-in msg [:error :message])))]
+    (and (= (get msg protocol-keyword) rpc-version)
+         (contains? msg :id) (nil? (:id msg))
+         error-and-no-result)))</pre></td></tr><tr><td class="docs"><h2>Inbound Requests, Notifications</h2>
+</td><td class="codes"></td></tr><tr><td class="docs">
+</td><td class="codes"><pre class="brush: clojure">(defn handle-request
+  [protocol-keyword request-handlers msg]
+  (let [method (name (:method msg))
+        params (:params msg)
+        id (:id msg)
+        ok-response (fn [result] {protocol-keyword rpc-version
+                                  :result result
+                                  :id id})
+        invalid-params (fn [e-msg] {protocol-keyword rpc-version
+                                    :error (assoc (:invalid-params rpc-error) :data e-msg)
+                                    :id id})
+        method-not-found (fn [] {protocol-keyword rpc-version
+                                 :error (:method-not-found rpc-error)
+                                 :id id})]
+    (if (contains? request-handlers method)
+      (try
+        (ok-response (apply (get request-handlers method) params))
+        (catch clojure.lang.ArityException e (invalid-params (str e))))
+      (method-not-found))))</pre></td></tr><tr><td class="docs">
+</td><td class="codes"><pre class="brush: clojure">(defn handle-notification
+  [notification-error-handler notification-handlers msg]
+  (let [method (name (:method msg))
+        params (:params msg)]
+    (if (contains? notification-handlers method)
+      (apply (get notification-handlers method) params)
+      (notification-error-handler
+        (ex-info (str &quot;No handler found for notification:&quot; method)
+                 {:type :notification-handler-not-found :method method})))))</pre></td></tr><tr><td class="spacer docs">&nbsp;</td><td class="codes" /></tr></table><div class="footer">Generated by <a href="https://github.com/gdeer81/marginalia">Marginalia</a>.&nbsp;&nbsp;Syntax highlighting provided by Alex Gorbatchev's <a href="http://alexgorbatchev.com/SyntaxHighlighter/">SyntaxHighlighter</a><div id="floating-toc"><ul><li class="floating-toc-li" id="floating-toc_clj-bson-rpc.tcp">clj-bson-rpc.tcp</li><li class="floating-toc-li" id="floating-toc_clj-bson-rpc.bson">clj-bson-rpc.bson</li><li class="floating-toc-li" id="floating-toc_clj-bson-rpc.bytes">clj-bson-rpc.bytes</li><li class="floating-toc-li" id="floating-toc_clj-bson-rpc.rpc">clj-bson-rpc.rpc</li></ul></div></div><script type="text/javascript">SyntaxHighlighter.defaults['gutter'] = false;
 SyntaxHighlighter.all();
 
 // hackity hack
