@@ -1,7 +1,7 @@
-(ns clj-bson-rpc.tcp-test
+(ns clj-bson-rpc.bson-rpc-test
   (:require
     [clojure.test :refer :all]
-    [clj-bson-rpc.tcp :refer :all]
+    [clj-bson-rpc.core :refer :all]
     [manifold.stream :as stream]
     [taoensso.timbre :as log]))
 
@@ -21,7 +21,7 @@
 
 (defn- gen-server-client! []
   (let [[a b] (create-duplex-stream)]
-    [(connect-rpc! a simple-request-handlers {}) (connect-rpc! b)]))
+    [(connect-bson-rpc! a simple-request-handlers {}) (connect-bson-rpc! b)]))
 
 (deftest simple-request
   (let [[s c] (gen-server-client!)]
@@ -70,8 +70,8 @@
   (let [record (atom [])
         [a b] (create-duplex-stream)
         ;; services in server
-        s (connect-rpc! a gen-request-handlers {})
+        s (connect-bson-rpc! a gen-request-handlers {})
         ;; client which accepts notifications from server
-        c (connect-rpc! b {} (partial gen-notification-handlers record))]
+        c (connect-bson-rpc! b {} (partial gen-notification-handlers record))]
     (is (= (request! c :process "Whammy!") "Done!"))
     (is (= @record ["W" "h" "a" "m" "m" "y" "!"]))))

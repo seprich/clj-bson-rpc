@@ -1,5 +1,6 @@
-(ns clj-bson-rpc.tcp
-  "BSON-RPC Connection over [manifold](https://github.com/ztellman/manifold) duplex stream.
+(ns clj-bson-rpc.core
+  "JSON-RPC 2.0 and BSON-RPC Connections over
+   [manifold](https://github.com/ztellman/manifold) duplex stream.
 
    Practical applications include using [aleph](https://github.com/ztellman/aleph)
    to establish TCP connection (+ TLS) between the client and the server.
@@ -9,6 +10,7 @@
   "
   (:require
     [clj-bson-rpc.bson :refer [bson-codec]]
+    [clj-bson-rpc.json :refer [json-codec]]
     [clj-bson-rpc.rpc :as rpc :refer [rpc-error rpc-version]]
     [clojure.core.async :refer [<!! go]]
     [manifold.stream :as stream]
@@ -169,8 +171,8 @@
 ;; # Public Interface
 
 (def default-options
-  "Default options. See `connect-rpc!` for semantic explanations. Use these values
-   for keys which were not provided in the `options` argument.
+  "`connect-rpc!` default options. See `connect-bson-rpc!` and `connect-json-rpc!` for semantic explanations.
+   These values are used for those options which are not provided in the `options` Map argument.
 
    Defaults:
 
@@ -182,7 +184,6 @@
                                  the most time-consuming tasks without blocking other incoming messages.
                                  Yet the client side can deside whether to call requests in tight
                                  sequential order or to call them in parallel.
-   * `:bson-max-len` - The max capacity defined in bson specification: 2 147 483 647 bytes (Max Int32)
    * `:connection-closed-handler` - Default handler stops the service for the current stream and
                                     closes the stream. (No effect on the server socket/object.)
    * `:connection-id` - Arbitrary unique ID to identify connection, shown in logging so that
@@ -192,23 +193,26 @@
    * `:idle-timeout-handler` - Default handler stops the service for the current stream and
                                closes the stream. (No effect on the the server socket/object.)
    * `:invalid-id-response-handler` - Default handler logs the error.
+   * `:json-framing` - Default `:none` means JSON messages are streamed consequentially without framing.
+   * `:json-key-fn`- Default `clojure.core/keyword`, JSON Object keys are keywordized.
+   * `:max-len` - The max capacity defined in bson specification: 2 147 483 647 bytes (Max Int32)
    * `:nil-id-error-handler` - Default handler logs the error message sent by rpc peer node.
    * `:notification-error-handler` - Default handler logs the error.
-   * `:protocol-keyword` - Default value `:bsonrpc`
    * `:server` - Default value `nil`
   "
   {:async-notification-handling false
    :async-request-handling true
-   :bson-max-len (Integer/MAX_VALUE)
    :connection-closed-handler default-close-handler
    :connection-id nil
    :id-generator rpc/default-id-generator
    :idle-timeout nil
    :idle-timeout-handler default-timeout-handler
    :invalid-id-response-handler default-invalid-id-response-handler
+   :json-framing :none
+   :json-key-fn keyword
+   :max-len (Integer/MAX_VALUE)
    :nil-id-error-handler default-nil-id-error-handler
    :notification-error-handler default-notification-error-handler
-   :protocol-keyword :bsonrpc
    :server nil})
 
 (defn close-connection!
@@ -246,9 +250,49 @@
   ([response]
    (throw (ex-info "" {:type :rpc-control :action :close-all :response response}))))
 
-(defn connect-rpc!
-  "Connect rpc services and create a context for sending
-   bson-rpc requests and notifications to the rpc peer node over TCP connection.
+(defn- connect-rpc!
+  "Connect BSON/JSON RPC Services.
+   See: `connect-bson-rcp!` and `connect-json-rpc!`
+  "
+  [s codec request-handlers notification-handlers options]
+   (let [xson-stream (case codec
+                       :bson (bson-codec s :max-len (get options :max-len (Integer/MAX_VALUE)))
+                       :json (json-codec s :json-framing (get options :json-framing :none)
+                                           :json-key-fn (get options :json-key-fn keyword)
+                                           :max-len (get options :max-len (Integer/MAX_VALUE)))
+                       (throw (ex-info "Invalid codec.")))
+         default-protocol-keyword (keyword (str (name codec) "rpc"))
+         run-services (atom true)
+         response-channels (atom {})
+         rpc-ctx (into (into default-options options)
+                       {:close! #(do (stream/close! xson-stream)
+                                     (reset! run-services false))
+                        :close-server! #(if (:server options) (.close (:server options)))
+                        :connection-id (if (nil? (:connection-id options))
+                                         (str (swap! rpc/identifier-counter inc))
+                                         (:connection-id options))
+                        :protocol-keyword (get options :protocol-keyword default-protocol-keyword)
+                        :response-channels response-channels
+                        :run-services run-services
+                        :socket xson-stream})]
+     (let [keys->strings (fn [m] (into {} (mapv (fn [[k v]] [(name k) v]) m)))
+           notification-handlers (keys->strings
+                                   (if (fn? notification-handlers)
+                                     (notification-handlers rpc-ctx)
+                                     notification-handlers))
+           request-handlers (keys->strings
+                              (if (fn? request-handlers)
+                                (request-handlers rpc-ctx)
+                                request-handlers))
+           rpc-ctx (assoc rpc-ctx
+                          :notification-handlers notification-handlers
+                          :request-handlers request-handlers)]
+       (run-rpc-services rpc-ctx)
+       rpc-ctx)))
+
+(defn connect-bson-rpc!
+  "Connect rpc services and create a context for sending BSON-RPC (2.0)
+   requests and notifications to the RPC Peer Node over TCP connection.
 
    * `s` - Manifold duplex stream connected to the rpc peer node.
            (e.g. from aleph.tcp/start-server to the handler or from aleph.tcp/client)
@@ -293,7 +337,6 @@
          If `:async-notification-handling` was set to `false` then all notifications
          possibly sent by a (peer node) response handler will be processed by
          the time the response is returned.
-   * `:bson-max-len` - Incoming bson message max length.
    * `:connection-closed-handler` - Is called when peer closes the connection.
                                     One argument: `rpc-ctx`. Return value ignored.
    * `:connection-id` - ID to use in server logging to identify current connection.
@@ -306,50 +349,112 @@
    * `:invalid-id-response-handler` - Two arguments: `rpc-ctx` and message. Return value ignored.
                                       Used if peer sends a response in which ID does not match with
                                       any sent requests waiting for a response.
+   * `:max-len` - Incoming message max length.
    * `:nil-id-error-handler` - Is called when an error response with `id: null` is received from the peer node.
                                (Normal error responses are marshalled to throw errors within request! calls.)
                                Two arguments: `rpc-ctx` and `message` (::String). Return value ignored.
    * `:notification-error-handler` - Two arguments: `rpc-ctx` and thrown Exception object. Return value ignored.
-   * `:protocol-keyword` - Affects the name of the keyword used in bson message documents.
-                           (e.g. using :jsonrpc would follow more closely the json rpc 2.0 specification)
-                           Used protocol is still bson regardless of this keyword.
+   * `:protocol-keyword` - Affects the name of the keyword used in BSON message documents.
+                           Defaults to `:bsonrpc` if option is omitted. Having value \"2.0\"
+                           Rationale: BSON-RPC is derived from and closely matches JSON-RPC 2.0.
+                           (Support for Version 1.0 of the protocol not planned.)
    * `:server` - A java.io.Closeable object. Give if your handlers need the ability to close the
                  server object.
 
    Returns `rpc-ctx` to be used with `request!` and `notify!`.
   "
-  ([s] (connect-rpc! s {} {} default-options))
-  ([s options] (connect-rpc! s {} {} options))
+  ([s] (connect-rpc! s :bson {} {} default-options))
+  ([s options] (connect-rpc! s :bson {} {} options))
   ([s request-handlers notification-handlers]
-   (connect-rpc! s request-handlers notification-handlers default-options))
+   (connect-rpc! s :bson request-handlers notification-handlers default-options))
   ([s request-handlers notification-handlers options]
-   (let [bson-stream (bson-codec s :max-len (get options :bson-max-len (Integer/MAX_VALUE)))
-         run-services (atom true)
-         response-channels (atom {})
-         rpc-ctx (into (into default-options options)
-                       {:close! #(do (stream/close! bson-stream)
-                                     (reset! run-services false))
-                        :close-server! #(if (:server options) (.close (:server options)))
-                        :connection-id (if (nil? (:connection-id options))
-                                         (str (swap! rpc/identifier-counter inc))
-                                         (:connection-id options))
-                        :response-channels response-channels
-                        :run-services run-services
-                        :socket bson-stream})]
-     (let [keys->strings (fn [m] (into {} (mapv (fn [[k v]] [(name k) v]) m)))
-           notification-handlers (keys->strings
-                                   (if (fn? notification-handlers)
-                                     (notification-handlers rpc-ctx)
-                                     notification-handlers))
-           request-handlers (keys->strings
-                              (if (fn? request-handlers)
-                                (request-handlers rpc-ctx)
-                                request-handlers))
-           rpc-ctx (assoc rpc-ctx
-                          :notification-handlers notification-handlers
-                          :request-handlers request-handlers)]
-       (run-rpc-services rpc-ctx)
-       rpc-ctx))))
+   (connect-rpc! s :bson request-handlers notification-handlers options)))
+
+(defn connect-json-rpc!
+  "Connect rpc services and create a context for sending JSON-RPC 2.0
+   requests and notifications to the RPC Peer Node over TCP connection.
+
+   * `s` - Manifold duplex stream connected to the rpc peer node.
+           (e.g. from aleph.tcp/start-server to the handler or from aleph.tcp/client)
+   * `request-handlers`
+       * A Map of request handlers: {::String/Keyword ::Function}. These functions are
+         exposed to be callable by the rpc peer node. Function return values
+         are sent back to peer node and any thrown errors are sent as error responses
+         to the peer node.
+       * Alternatively this parameter accepts a function which takes `rpc-ctx` and returns
+         an above-mentioned Map of request handlers. Necessary if any request handler needs
+         to send notifications to peer during the processing of request.
+         example function:
+
+           ```
+           (defn generate-request-handlers [rpc-ctx]
+             {:quick-task quick-task
+              :long-process (partial long-process rpc-ctx)})
+           ```
+         where the `long-process` will thus have the `rpc-ctx` and will be able to call
+         `(notify! rpc-ctx :report-progress details)` or even `(request! rpc-ctx ...)`
+   * `notification-handlers`
+       * A Map of notification handlers: {::String/Keyword ::Function}. These functions
+         will receive the named notifications sent by the peer node.
+         Any errors thrown by these handlers will be delegated to a callback
+         defined by `(:notification-error-handler options)`
+       * Alternatively can be a function which takes `rpc-ctx` and returns a Map of handlers.
+   * `options` - A Map of optional arguments. `default-options` are used as a baseline of which
+                 any or all values can be overridden with ones provided by `options`.
+
+   Valid keys for `options`:
+
+   * `:async-notification-handling` - Boolean for async handling of notifications.
+       * false -> Handler functions are guaranteed to be called in the message
+                  receiving order. Next incoming message can't be processed until
+                  the handler function returns.
+       * true -> Handlers executed in go-blocks -> random order.
+   * `:async-request-handling` - Boolean for async handling of requests. Async handling allows multiple
+     requests to processed in parallel (if client so wishes). Note that client
+     can enforce synchronous processing simply by waiting the answer to previous
+     request before calling new request.
+       * Dispatching of responses is synchronous regardless of this setting.
+         If `:async-notification-handling` was set to `false` then all notifications
+         possibly sent by a (peer node) response handler will be processed by
+         the time the response is returned.
+   * `:connection-closed-handler` - Is called when peer closes the connection.
+                                    One argument: `rpc-ctx`. Return value ignored.
+   * `:connection-id` - ID to use in server logging to identify current connection.
+   * `:id-generator` - Is called when a new ID for outgoing rpc request is needed. No arguments.
+                       Must return a string or integer which should be unique over the duration of the connection.
+   * `:idle-timeout` - Timeout in milliseconds. `idle-timeout-handler` will be triggered if timeout
+                       is enabled and nothing has been received from peer node within `idle-timeout`.
+                       Disable by setting to `nil`.
+   * `:idle-timeout-handler` - One argument: `rpc-ctx`. Return value ignored.
+   * `:invalid-id-response-handler` - Two arguments: `rpc-ctx` and message. Return value ignored.
+                                      Used if peer sends a response in which ID does not match with
+                                      any sent requests waiting for a response.
+   * `:json-framing` - One of the following keywords:
+       * `:none` - http://www.simple-is-better.org/json-rpc/transport_sockets.html
+       * `:rfc-7464` - https://tools.ietf.org/html/rfc7464
+   * `:json-key-fn` - JSON Object keys decode converter. Provide custom converter, otherwise by default
+                      `clojure.core/keyword` is used. Use `clojure.core/identity` to keep keys as strings.
+                      Encoding keywords are always converted to strings.
+   * `:max-len` - Incoming message max length. This option is ignored if `:json-framing` is `:none`
+   * `:nil-id-error-handler` - Is called when an error response with `id: null` is received from the peer node.
+                               (Normal error responses are marshalled to throw errors within request! calls.)
+                               Two arguments: `rpc-ctx` and `message` (::String). Return value ignored.
+   * `:notification-error-handler` - Two arguments: `rpc-ctx` and thrown Exception object. Return value ignored.
+   * `:protocol-keyword` - Affects the name of the keyword used in JSON message documents.
+                           Defaults to `:jsonrpc` if option is omitted. Having value \"2.0\" as
+                           is required by the JSON-RPC 2.0 Specification.
+                           (Support for Version 1.0 of the protocol not planned.)
+   * `:server` - A java.io.Closeable object. Give if your handlers need the ability to close the
+                 server object.
+
+   Returns `rpc-ctx` to be used with `request!` and `notify!`.
+  "
+  ([s] (connect-rpc! s :json {} {} default-options))
+  ([s options] (connect-rpc! s :json {} {} options))
+  ([s request-handlers notification-handlers]
+   (connect-rpc! s :json request-handlers notification-handlers default-options))
+  ([s request-handlers notification-handlers options]
+   (connect-rpc! s :json request-handlers notification-handlers options)))
 
 (defn async-request!
   "RPC Request in a `clojure.core.async` go-block.
