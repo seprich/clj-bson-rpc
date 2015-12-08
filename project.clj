@@ -19,5 +19,4 @@
           :metadata {:doc/format :markdown}}
   :profiles {:debug {:debug true
                      :injections [(prn (into {} (System/getProperties)))]}
-             :dev {}
-             :uberjar {:aot :all}})
+             :dev {}})
