@@ -76,6 +76,26 @@
     (stream/close! a)
     (is (= @(stream/take! json-stream) original2))))
 
+(deftest decode-over-1MiB-message
+  (let [[a b] (create-duplex-stream)
+        ipsum (slurp "test/data/ipsum.txt")
+        original {:pertama ipsum :kedua ipsum :ketiga ipsum
+                  :again [ipsum ipsum ipsum ipsum ipsum]}
+        json-stream (json-codec b)]
+    (is @(stream/put! a (->json-bytes original)))
+    (stream/close! a)
+    (is (= @(stream/take! json-stream) original))))
+
+(deftest decode-over-1MiB-message-rfc-7464
+  (let [[a b] (create-duplex-stream)
+        ipsum (slurp "test/data/ipsum.txt")
+        original {:pertama ipsum :kedua ipsum :ketiga ipsum
+                  :again [ipsum ipsum ipsum ipsum ipsum]}
+        json-stream (json-codec b :json-framing :rfc-7464)]
+    (is @(stream/put! a (->json-framed original)))
+    (stream/close! a)
+    (is (= @(stream/take! json-stream) original))))
+
 (defn- bytes->hex
   [b]
   (apply str (mapv #(format "%02x" %) b)))

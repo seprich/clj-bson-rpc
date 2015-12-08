@@ -13,9 +13,6 @@
    Throws IOException's
   "
   []
-  ;; NOTE: PipedInputStream and BufferedReader are left to use
-  ;;       their default buffer sizes.
-  ;; TODO: Perform some stress testing to verify sufficiency.
   (let [op (java.io.PipedOutputStream.)
         ip (java.io.PipedInputStream. op)
         reader (->> (java.nio.charset.Charset/forName "UTF8")

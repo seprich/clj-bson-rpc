@@ -50,6 +50,10 @@
   (let [data {:some 1 :items ["first" "second"] :nested {:foo "bar"}}]
     (is (= (decode (encode data)) data))))
 
+(deftest unicode-keys
+  (let [data {:some 1 :päivää {:even "more" :อรุณสวัสดิ์ "challenging"}}]
+    (is (= (decode (encode data)) data))))
+
 (deftest encoding-tiny-binary
   (let [data {:test "some"
               :int 988
