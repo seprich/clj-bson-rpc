@@ -14,7 +14,7 @@
             [lein-kibit "0.1.2"]
             [michaelblume/lein-marginalia "0.9.0"]
             [lein-ns-dep-graph "0.1.0-SNAPSHOT"]]
-  :codox {:namespaces [clj-bson-rpc.tcp]
+  :codox {:namespaces [clj-bson-rpc.core]
           :source-uri "https://github.com/seprich/clj-bson-rpc/blob/master/{filepath}#L{line}"
           :metadata {:doc/format :markdown}}
   :profiles {:debug {:debug true

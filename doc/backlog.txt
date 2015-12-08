@@ -1,3 +1,2 @@
-TODO:
-
-- json rpc support?
+# Backlog:
+* Add support for json-rpc batches.

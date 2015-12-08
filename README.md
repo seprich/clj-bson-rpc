@@ -8,7 +8,7 @@
 
 A Clojure library for JSON-RPC 2.0 and BSON-RPC on TCP (+ TLS).
 
-| [API doc](http://seprich.github.io/clj-bson-rpc/codox/clj-bson-rpc.tcp.html)
+| [API doc](http://seprich.github.io/clj-bson-rpc/codox/clj-bson-rpc.core.html)
 | [Marginalia](http://seprich.github.io/clj-bson-rpc/marginalia.html)
 |
 
@@ -181,26 +181,13 @@ requests to the Peer Node (= server).
 ; Finally Ready
 ```
 
+### API - BSON or JSON
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+* Selection between BSON and JSON boils down to choosing either
+  `connect-bson-rpc!` or `connect-json-rpc!`. Option differences
+  are minimal and documented in the
+  [API doc](http://seprich.github.io/clj-bson-rpc/codox/clj-bson-rpc.core.html).
+* Other API functions are used identically for both BSON and JSON.
 
 ## License
 
