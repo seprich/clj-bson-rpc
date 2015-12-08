@@ -2865,7 +2865,7 @@ net.brehaut.ClojureTools = (function (SH) {
     build_tree: build_tree
   };
 })(SyntaxHighlighter);
-</script><title>clj-bson-rpc -- Marginalia</title></head><body><table><tr><td class="docs"><div class="header"><h1 class="project-name"><a href="http://github.com/seprich/clj-bson-rpc">clj-bson-rpc</a></h1><h2 class="project-version">0.2.0</h2><br /><p>bson rpc protocol</p>
+</script><title>clj-bson-rpc -- Marginalia</title></head><body><table><tr><td class="docs"><div class="header"><h1 class="project-name"><a href="http://github.com/seprich/clj-bson-rpc">clj-bson-rpc</a></h1><h2 class="project-version">0.2.1</h2><br /><p>bson rpc protocol</p>
 </div><div class="dependencies"><h3>dependencies</h3><table><tr><td class="dep-name">com.taoensso/timbre</td><td class="dotted"><hr /></td><td class="dep-version">4.1.4</td></tr><tr><td class="dep-name">congomongo</td><td class="dotted"><hr /></td><td class="dep-version">0.4.6</td></tr><tr><td class="dep-name">manifold</td><td class="dotted"><hr /></td><td class="dep-version">0.1.1</td></tr><tr><td class="dep-name">org.clojure/clojure</td><td class="dotted"><hr /></td><td class="dep-version">1.7.0</td></tr><tr><td class="dep-name">org.clojure/core.async</td><td class="dotted"><hr /></td><td class="dep-version">0.2.374</td></tr><tr><td class="dep-name">org.clojure/data.json</td><td class="dotted"><hr /></td><td class="dep-version">0.2.6</td></tr></table></div></td><td class="codes" style="text-align: center; vertical-align: middle;color: #666;padding-right:20px"><br /><br /><br />(this space intentionally left almost blank)</td></tr><tr><td class="docs"><div class="toc"><a name="toc"><h3>namespaces</h3></a><ul><li><a href="#clj-bson-rpc.rpc">clj-bson-rpc.rpc</a></li><li><a href="#clj-bson-rpc.bytes">clj-bson-rpc.bytes</a></li><li><a href="#clj-bson-rpc.bson">clj-bson-rpc.bson</a></li><li><a href="#clj-bson-rpc.core">clj-bson-rpc.core</a></li><li><a href="#clj-bson-rpc.json">clj-bson-rpc.json</a></li></ul></div></td><td class="codes">&nbsp;</td></tr><tr><td class="docs"><div class="docs-header"><a class="anchor" href="#clj-bson-rpc.rpc" name="clj-bson-rpc.rpc"><h1 class="project-name">clj-bson-rpc.rpc</h1><a class="toc-link" href="#toc">toc</a></a></div></td><td class="codes" /></tr><tr><td class="docs"><p>BSON-RPC Connection over <a href="https://github.com/ztellman/manifold">manifold</a> duplex stream.</p>
 
 <p>   Practical applications include (but limited to) using <a href="https://github.com/ztellman/aleph">aleph</a>
@@ -3142,7 +3142,7 @@ duplex stream. Thus take! from this source will either:</p>
       (invalid-id-response-handler rpc-ctx msg))))</pre></td></tr><tr><td class="docs"><h2>Inbound Garbage</h2>
 </td><td class="codes"></td></tr><tr><td class="docs">
 </td><td class="codes"><pre class="brush: clojure">(defn- handle-parse-error
-  [{:keys [close! connection-id protocol-keyword socket]} msg]
+  [{:keys [close! connection-id protocol-keyword socket] :as rpc-ctx} msg]
   (go
     (let [try-send-error! (fn [] (try
                                    (if (not @(stream/put! socket {protocol-keyword rpc-version
@@ -3160,6 +3160,7 @@ duplex stream. Thus take! from this source will either:</p>
       (case (:type (ex-data msg))
         :exceeds-max-length (irrecoverable-error)
         :invalid-framing (irrecoverable-error)
+        :invalid-json (if (= (:json-framing rpc-ctx) :none) (irrecoverable-error) (transient-error))
         :invalid-bson (transient-error)
         :trailing-garbage (log/warn connection-id &quot;-&quot; msg)
         (log/error connection-id &quot;- Unexpected parse error:&quot; msg)))))</pre></td></tr><tr><td class="docs">
