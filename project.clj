@@ -1,4 +1,4 @@
-(defproject clj-bson-rpc "0.2.0"
+(defproject clj-bson-rpc "0.2.1"
   :description "bson rpc protocol"
   :url "http://github.com/seprich/clj-bson-rpc"
   :license {:name "Eclipse Public License"

@@ -103,7 +103,7 @@
 ;; ## Inbound Garbage
 
 (defn- handle-parse-error
-  [{:keys [close! connection-id protocol-keyword socket]} msg]
+  [{:keys [close! connection-id protocol-keyword socket] :as rpc-ctx} msg]
   (go
     (let [try-send-error! (fn [] (try
                                    (if (not @(stream/put! socket {protocol-keyword rpc-version
@@ -121,6 +121,7 @@
       (case (:type (ex-data msg))
         :exceeds-max-length (irrecoverable-error)
         :invalid-framing (irrecoverable-error)
+        :invalid-json (if (= (:json-framing rpc-ctx) :none) (irrecoverable-error) (transient-error))
         :invalid-bson (transient-error)
         :trailing-garbage (log/warn connection-id "-" msg)
         (log/error connection-id "- Unexpected parse error:" msg)))))

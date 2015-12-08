@@ -3,6 +3,11 @@ All notable changes to this project will be documented in this file. This change
 
 ## [unreleased]
 
+## [0.2.1] - 2015-12-09
+### Fixed
+- Upon invalid JSON either log only or close connection depending on
+  the used `:json-framing` transport option.
+
 ## [0.2.0] - 2015-12-08
 ### Added
 - JSON-RPC support: `connect-json-rpc!`
@@ -15,6 +20,7 @@ All notable changes to this project will be documented in this file. This change
 ### Initial Version:
 - BSON-RPC - requests and notifications over TCP connection.
 
-[unreleased]: https://github.com/seprich/clj-bson-rpc/compare/0.2.0...HEAD
+[unreleased]: https://github.com/seprich/clj-bson-rpc/compare/0.2.1...HEAD
+[0.2.1]: https://github.com/seprich/clj-bson-rpc/compare/0.2.0...0.2.1
 [0.2.0]: https://github.com/seprich/clj-bson-rpc/compare/0.1.0...0.2.0
 [0.1.0]: https://github.com/seprich/clj-bson-rpc/tree/0.1.0
