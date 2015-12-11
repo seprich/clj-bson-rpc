@@ -10,17 +10,11 @@ A Clojure library for JSON-RPC 2.0 and BSON-RPC on TCP (+ TLS).
 
 | [API doc](http://seprich.github.io/clj-bson-rpc/codox/clj-bson-rpc.core.html)
 | [Marginalia](http://seprich.github.io/clj-bson-rpc/marginalia.html)
+| [Change Log](https://github.com/seprich/clj-bson-rpc/blob/master/CHANGELOG.md)
 |
 
+
 ## Features
-
-#### Transport
-
-* This library uses [Manifold](https://github.com/ztellman/manifold) message
-  streams. Documentation here implicitly assumes that the
-  [aleph](https://github.com/ztellman/aleph) library will be used as the
-  TCP (+TLS) connectivity provider, but any stream connection which can be
-  wrapped into manifold duplex-stream should suffice.
 
 #### JSON-RPC 2.0
 
@@ -48,9 +42,17 @@ A Clojure library for JSON-RPC 2.0 and BSON-RPC on TCP (+ TLS).
         * Base64 encoded binary within JSON-RPC suffers 33% increase in size.
     * Has a Datetime type.
 
+#### Transport
+
+* This library uses [Manifold](https://github.com/ztellman/manifold) message
+  streams. Documentation here implicitly assumes that the
+  [aleph](https://github.com/ztellman/aleph) library will be used as the
+  TCP (+TLS) connectivity provider, but any stream connection which can be
+  wrapped into manifold duplex-stream should suffice.
+
 #### Other
 
-* Logging with [timbre](https://github.com/ptaoussanis/timbre).
+* Logs with [timbre](https://github.com/ptaoussanis/timbre).
 
 
 ## Quickstart
