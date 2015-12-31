@@ -1,4 +1,4 @@
-(defproject clj-bson-rpc "0.2.2"
+(defproject clj-bson-rpc "0.2.3"
   :description "bson rpc protocol"
   :url "http://github.com/seprich/clj-bson-rpc"
   :license {:name "Eclipse Public License"
@@ -10,7 +10,7 @@
                  [org.clojure/core.async "0.2.374"]
                  [org.clojure/data.json "0.2.6"]] ; NOTE: not using cheshire due to issue #94.
   :plugins [[lein-ancient "0.6.8"] ; https://github.com/xsc/lein-ancient/issues/58
-            [lein-codox "0.9.0"]
+            [lein-codox "0.9.1"]
             [lein-kibit "0.1.2"]
             [michaelblume/lein-marginalia "0.9.0"]
             [lein-ns-dep-graph "0.1.0-SNAPSHOT"]]
