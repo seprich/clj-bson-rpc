@@ -3,6 +3,10 @@ All notable changes to this project will be documented in this file. This change
 
 ## [unreleased]
 
+## [0.2.2] - 2016-01-01
+### Changed
+- Dependencies update
+
 ## [0.2.1] - 2015-12-09
 ### Fixed
 - Upon invalid JSON either log only or close connection depending on
@@ -20,7 +24,8 @@ All notable changes to this project will be documented in this file. This change
 ### Initial Version:
 - BSON-RPC - requests and notifications over TCP connection.
 
-[unreleased]: https://github.com/seprich/clj-bson-rpc/compare/0.2.1...HEAD
+[unreleased]: https://github.com/seprich/clj-bson-rpc/compare/0.2.2...HEAD
+[0.2.2]: https://github.com/seprich/clj-bson-rpc/compare/0.2.1...0.2.2
 [0.2.1]: https://github.com/seprich/clj-bson-rpc/compare/0.2.0...0.2.1
 [0.2.0]: https://github.com/seprich/clj-bson-rpc/compare/0.1.0...0.2.0
 [0.1.0]: https://github.com/seprich/clj-bson-rpc/tree/0.1.0
