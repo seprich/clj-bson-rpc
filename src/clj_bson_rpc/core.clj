@@ -276,18 +276,10 @@
                         :response-channels response-channels
                         :run-services run-services
                         :socket xson-stream})]
-     (let [keys->strings (fn [m] (into {} (mapv (fn [[k v]] [(name k) v]) m)))
-           notification-handlers (keys->strings
-                                   (if (fn? notification-handlers)
-                                     (notification-handlers rpc-ctx)
-                                     notification-handlers))
-           request-handlers (keys->strings
-                              (if (fn? request-handlers)
-                                (request-handlers rpc-ctx)
-                                request-handlers))
+     (let [set-ctx (fn [mfn] (if (fn? mfn) (mfn rpc-ctx) mfn))
            rpc-ctx (assoc rpc-ctx
-                          :notification-handlers notification-handlers
-                          :request-handlers request-handlers)]
+                          :notification-handlers (set-ctx notification-handlers)
+                          :request-handlers (set-ctx request-handlers))]
        (run-rpc-services rpc-ctx)
        rpc-ctx)))
 

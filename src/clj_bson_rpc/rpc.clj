@@ -61,7 +61,8 @@
 
 (defn handle-request
   [protocol-keyword request-handlers msg]
-  (let [method (name (:method msg))
+  (let [method-name-kw (keyword (:method msg))
+        method-name (name (:method msg))
         params (:params msg)
         id (:id msg)
         ok-response (fn [result] {protocol-keyword rpc-version
@@ -72,19 +73,32 @@
                                     :id id})
         method-not-found (fn [] {protocol-keyword rpc-version
                                  :error (:method-not-found rpc-error)
-                                 :id id})]
-    (if (contains? request-handlers method)
-      (try
-        (ok-response (apply (get request-handlers method) params))
-        (catch clojure.lang.ArityException e (invalid-params (str e))))
-      (method-not-found))))
+                                 :id id})
+        request-handlers (if (instance? clojure.lang.IDeref request-handlers)
+                           (deref request-handlers)
+                           request-handlers)
+        send-response (fn [method params]
+                        (try
+                          (ok-response (apply (get request-handlers method) params))
+                          (catch clojure.lang.ArityException e (invalid-params (str e)))))]
+    (if (contains? request-handlers method-name-kw)
+      (send-response method-name-kw params)
+      (if (contains? request-handlers method-name)
+        (send-response method-name params)
+        (method-not-found)))))
 
 (defn handle-notification
   [notification-error-handler notification-handlers msg]
-  (let [method (name (:method msg))
-        params (:params msg)]
-    (if (contains? notification-handlers method)
-      (apply (get notification-handlers method) params)
-      (notification-error-handler
-        (ex-info (str "No handler found for notification:" method)
-                 {:type :notification-handler-not-found :method method})))))
+  (let [method-name-kw (keyword (:method msg))
+        method-name (name (:method msg))
+        params (:params msg)
+        notification-handlers (if (instance? clojure.lang.IDeref notification-handlers)
+                                (deref notification-handlers)
+                                notification-handlers)]
+    (if (contains? notification-handlers method-name-kw)
+      (apply (get notification-handlers method-name-kw) params)
+      (if (contains? notification-handlers method-name)
+        (apply (get notification-handlers method-name) params)
+        (notification-error-handler
+          (ex-info (str "No handler found for notification:" method-name)
+                   {:type :notification-handler-not-found :method method-name}))))))
