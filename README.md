@@ -191,6 +191,13 @@ requests to the Peer Node (= server).
   [API doc](http://seprich.github.io/clj-bson-rpc/codox/clj-bson-rpc.core.html).
 * Other API functions are used identically for both BSON and JSON.
 
+
+### TODO
+
+* JSON-RPC Batch support
+* Support dynamic modification of rpc method and notification handlers.
+  Enabling e.g. register/unregister-method functionality.
+
 ## License
 
 Copyright © 2015 Jussi Seppälä
