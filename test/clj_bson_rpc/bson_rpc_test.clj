@@ -75,3 +75,17 @@
         c (connect-bson-rpc! b {} (partial gen-notification-handlers record))]
     (is (= (request! c :process "Whammy!") "Done!"))
     (is (= @record ["W" "h" "a" "m" "m" "y" "!"]))))
+
+(deftest dynamic-selection-of-requests
+  (let [request-handlers (atom {:echo (fn [msg] (apply str (reverse msg)))})
+        [a b] (create-duplex-stream)
+        [s c] [(connect-bson-rpc! a request-handlers {}) (connect-bson-rpc! b)]]
+    (is (= (request! c :echo "Try this!") "!siht yrT"))
+    (is (thrown-with-msg? clojure.lang.ExceptionInfo #"Method not found"
+                          (request! c :another-brother 5 4 3)))
+    (swap! request-handlers
+           (fn [h] (assoc h :another-brother (fn [a b c] (/ (+ a b) c)))))
+    (is (= (request! c :another-brother 5 4 3) 3))
+    (swap! request-handlers (fn [h] (dissoc h :echo)))
+    (is (thrown-with-msg? clojure.lang.ExceptionInfo #"Method not found"
+                          (request! c :echo "Try this!")))))
