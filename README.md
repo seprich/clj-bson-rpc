@@ -183,6 +183,21 @@ requests to the Peer Node (= server).
 ; Finally Ready
 ```
 
+### Providing a dynamic set of RPC methods
+
+In both example cases above the selection of provided request and notification
+-handlers are given in Maps to `rpc/connect-json-rpc`. Instead of plain Maps
+also Maps wrapped in Atoms are accepted:
+```clojure
+;; In the above 'Minimalistic example' modify request-handlers:
+(def request-handlers
+  (atom {:swap-it (fn [msg] (apply str (reverse msg)))
+         :intersperse (fn [c msg] (apply str (interpose c (seq msg))))}))
+```
+This feature allows methods to be added and removed dynamically even during
+the lifespan of a connection.
+
+
 ### API - BSON or JSON
 
 * Selection between BSON and JSON boils down to choosing either
@@ -195,8 +210,6 @@ requests to the Peer Node (= server).
 ### TODO
 
 * JSON-RPC Batch support
-* Support dynamic modification of rpc method and notification handlers.
-  Enabling e.g. register/unregister-method functionality.
 
 ## License
 

@@ -306,12 +306,16 @@
            ```
          where the `long-process` will thus have the `rpc-ctx` and will be able to call
          `(notify! rpc-ctx :report-progress details)` or even `(request! rpc-ctx ...)`
+       * Also an Atom containing a `Map` is accepted instead of a plain `Map` in both above cases.
+         This feature allows a runtime modification of the methods which are provided for the
+         peer node.
    * `notification-handlers`
        * A Map of notification handlers: {::String/Keyword ::Function}. These functions
          will receive the named notifications sent by the peer node.
          Any errors thrown by these handlers will be delegated to a callback
          defined by `(:notification-error-handler options)`
        * Alternatively can be a function which takes `rpc-ctx` and returns a Map of handlers.
+       * Also an Atom containing a `Map` is accepted instead of a plain `Map` in both above cases.
    * `options` - A Map of optional arguments. `default-options` are used as a baseline of which
                  any or all values can be overridden with ones provided by `options`.
 
@@ -386,12 +390,16 @@
            ```
          where the `long-process` will thus have the `rpc-ctx` and will be able to call
          `(notify! rpc-ctx :report-progress details)` or even `(request! rpc-ctx ...)`
+       * Also an Atom containing a `Map` is accepted instead of a plain `Map` in both above cases.
+         This feature allows a runtime modification of the methods which are provided for the
+         peer node.
    * `notification-handlers`
        * A Map of notification handlers: {::String/Keyword ::Function}. These functions
          will receive the named notifications sent by the peer node.
          Any errors thrown by these handlers will be delegated to a callback
          defined by `(:notification-error-handler options)`
        * Alternatively can be a function which takes `rpc-ctx` and returns a Map of handlers.
+       * Also an Atom containing a `Map` is accepted instead of a plain `Map` in both above cases.
    * `options` - A Map of optional arguments. `default-options` are used as a baseline of which
                  any or all values can be overridden with ones provided by `options`.
 
