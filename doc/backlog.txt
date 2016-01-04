@@ -1,3 +1,2 @@
 # Backlog:
 * Add support for json-rpc batches.
-* Support for dynamic rpc changes.
