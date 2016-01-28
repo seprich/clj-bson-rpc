@@ -1,7 +1,7 @@
+[![Clojars Project](https://img.shields.io/clojars/v/clj-bson-rpc.svg)](https://clojars.org/clj-bson-rpc)
 [![Build Status](https://travis-ci.org/seprich/clj-bson-rpc.svg?branch=master)](https://travis-ci.org/seprich/clj-bson-rpc)
 [![Dependencies Status](https://jarkeeper.com/seprich/clj-bson-rpc/status.svg)](https://jarkeeper.com/seprich/clj-bson-rpc)
 
-[![Clojars Project](http://clojars.org/clj-bson-rpc/latest-version.svg)](http://clojars.org/clj-bson-rpc)
 
 # clj-bson-rpc
 
