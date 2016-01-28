@@ -1,12 +1,12 @@
-(defproject clj-bson-rpc "0.2.3"
+(defproject clj-bson-rpc "0.2.4"
   :description "bson rpc protocol"
   :url "http://github.com/seprich/clj-bson-rpc"
   :license {:name "Eclipse Public License"
             :url "http://www.eclipse.org/legal/epl-v10.html"}
-  :dependencies [[com.taoensso/timbre "4.2.0" :exclusions [org.clojure/tools.reader]]
+  :dependencies [[com.taoensso/timbre "4.2.1" :exclusions [org.clojure/tools.reader]]
                  [congomongo "0.4.7"]
                  [manifold "0.1.1"]
-                 [org.clojure/clojure "1.7.0"]
+                 [org.clojure/clojure "1.8.0"]
                  [org.clojure/core.async "0.2.374"]
                  [org.clojure/data.json "0.2.6"]] ; NOTE: not using cheshire due to issue #94.
   :plugins [[lein-ancient "0.6.8"] ; https://github.com/xsc/lein-ancient/issues/58
