@@ -3,6 +3,10 @@ All notable changes to this project will be documented in this file. This change
 
 ## [unreleased]
 
+## [0.2.5] - 2016-03-06
+### Changed
+- Update dependencies
+
 ## [0.2.4] - 2016-01-28
 ### Changed
 - Update dependencies
@@ -32,7 +36,8 @@ All notable changes to this project will be documented in this file. This change
 ### Initial Version:
 - BSON-RPC - requests and notifications over TCP connection.
 
-[unreleased]: https://github.com/seprich/clj-bson-rpc/compare/0.2.4...HEAD
+[unreleased]: https://github.com/seprich/clj-bson-rpc/compare/0.2.5...HEAD
+[0.2.5]: https://github.com/seprich/clj-bson-rpc/compare/0.2.4...0.2.5
 [0.2.4]: https://github.com/seprich/clj-bson-rpc/compare/0.2.3...0.2.4
 [0.2.3]: https://github.com/seprich/clj-bson-rpc/compare/0.2.2...0.2.3
 [0.2.2]: https://github.com/seprich/clj-bson-rpc/compare/0.2.1...0.2.2
